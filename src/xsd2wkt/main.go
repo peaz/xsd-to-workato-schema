@@ -17,7 +17,7 @@ type XSD struct {
 // Add Type field to Element struct
 type Element struct {
 	Name     string    `xml:"name,attr"`
-	Type     string    `xml:"type,attr"` // {{ edit_1 }}
+	Type     string    `xml:"type,attr"`
 	Children []Element `xml:"complexType>sequence>element"`
 }
 
@@ -48,32 +48,41 @@ func generateTemplate(xsd XSD) string {
 		return sb.String() // Return an empty template if no elements are found
 	}
 
+	if len(xsd.Elements[0].Children) > 0 {
+		sb.WriteString("{{#" + xsd.Elements[0].Name + "}}\n")
+	}
+
 	sb.WriteString("<" + xsd.Elements[0].Name + ">\n")
 	for _, element := range xsd.Elements {
 		generateElementTemplate(&sb, element, "")
 	}
-	sb.WriteString("</" + xsd.Elements[0].Name + ">")
+	sb.WriteString("</" + xsd.Elements[0].Name + ">\n")
+
+	if len(xsd.Elements[0].Children) > 0 {
+		sb.WriteString("{{/" + xsd.Elements[0].Name + "}}\n")
+	}
+
 	return sb.String()
 }
 
 // Recursive function to generate template for each element
 func generateElementTemplate(sb *strings.Builder, element Element, parentName string) {
 	if parentName != "" {
-		sb.WriteString("    {{#list " + parentName + "_" + element.Name + "}}\n")
-		sb.WriteString("    <" + element.Name + ">\n")
+		sb.WriteString("{{#" + parentName + "_" + element.Name + "}}\n")
+		sb.WriteString("<" + element.Name + ">\n")
 	}
 
 	for _, child := range element.Children {
 		if len(child.Children) > 0 { // Check if the child has its own children (complex type)
 			generateElementTemplate(sb, child, element.Name) // Recursive call for nested elements
 		} else {
-			sb.WriteString("        <" + child.Name + ">{{" + element.Name + "_" + child.Name + "}}</" + child.Name + ">\n")
+			sb.WriteString("<" + child.Name + ">{{" + element.Name + "_" + child.Name + "}}</" + child.Name + ">\n")
 		}
 	}
 
 	if parentName != "" {
-		sb.WriteString("    </" + element.Name + ">\n")
-		sb.WriteString("    {{/list}}\n")
+		sb.WriteString("</" + element.Name + ">\n")
+		sb.WriteString("{{/" + parentName + "_" + element.Name + "}}\n")
 	}
 }
 
@@ -82,6 +91,7 @@ type WorkatoField struct {
 	Name        string         `json:"name"`
 	Label       string         `json:"label,omitempty"`
 	Type        string         `json:"type,omitempty"`
+	Of          string         `json:"of,omitempty"`
 	Optional    bool           `json:"optional,omitempty"`
 	ControlType string         `json:"control_type,omitempty"`
 	Properties  []WorkatoField `json:"properties,omitempty"`
@@ -101,7 +111,8 @@ func generateWorkatoSchema(xsd XSD) ([]WorkatoField, error) {
 
 		// If the element has children, treat it as an object with properties
 		if len(element.Children) > 0 {
-			workatoField.Type = "object"
+			workatoField.Type = "array"
+			workatoField.Of = "object"
 			workatoField.Properties = generateWorkatoSchemaForChildren(element.Children, workatoField.Name)
 		}
 
@@ -148,8 +159,9 @@ func generateWorkatoSchemaForChildren(children []Element, parent string) []Worka
 
 		// If the child has its own children, treat it as an object
 		if len(child.Children) > 0 {
-			workatoField.Type = "object"
-			workatoField.Properties = generateWorkatoSchemaForChildren(child.Children, workatoField.Name)
+			workatoField.Type = "array"
+			workatoField.Of = "object"
+			workatoField.Properties = generateWorkatoSchemaForChildren(child.Children, child.Name)
 		}
 
 		properties = append(properties, workatoField)
