@@ -59,8 +59,8 @@ func generateTemplate(xsd XSD) string {
 // Recursive function to generate template for each element
 func generateElementTemplate(sb *strings.Builder, element Element, parentName string) {
 	if parentName != "" {
-		sb.WriteString("    <" + element.Name + ">\n")
 		sb.WriteString("    {{#list " + parentName + "_" + element.Name + "}}\n")
+		sb.WriteString("    <" + element.Name + ">\n")
 	}
 
 	for _, child := range element.Children {
@@ -72,15 +72,9 @@ func generateElementTemplate(sb *strings.Builder, element Element, parentName st
 	}
 
 	if parentName != "" {
-		sb.WriteString("    {{/list}}\n")
 		sb.WriteString("    </" + element.Name + ">\n")
+		sb.WriteString("    {{/list}}\n")
 	}
-}
-
-// Function to validate Mustache template (basic validation)
-func validateTemplate(template string) bool {
-	// Check for opening and closing tags
-	return strings.Contains(template, "{{#list") && strings.Contains(template, "{{/list}}")
 }
 
 // Define the structure for the Workato schema
@@ -108,7 +102,7 @@ func generateWorkatoSchema(xsd XSD) ([]WorkatoField, error) {
 		// If the element has children, treat it as an object with properties
 		if len(element.Children) > 0 {
 			workatoField.Type = "object"
-			workatoField.Properties = generateWorkatoSchemaForChildren(element.Children)
+			workatoField.Properties = generateWorkatoSchemaForChildren(element.Children, workatoField.Name)
 		}
 
 		fields = append(fields, workatoField)
@@ -136,12 +130,18 @@ func mapXSDTypeToWorkatoType(xsdType string) string {
 }
 
 // Function to generate Workato Schema for child elements
-func generateWorkatoSchemaForChildren(children []Element) []WorkatoField {
+func generateWorkatoSchemaForChildren(children []Element, parent string) []WorkatoField {
 	var properties []WorkatoField
+	var fieldName = ""
 	for _, child := range children {
+		if parent == "" {
+			fieldName = child.Name
+		} else {
+			fieldName = parent + "_" + child.Name
+		}
 		workatoField := WorkatoField{
-			Name:     child.Name,
-			Label:    child.Name,
+			Name:     fieldName,
+			Label:    fieldName,
 			Type:     mapXSDTypeToWorkatoType(child.Type),
 			Optional: true, // Set to true or false based on your logic
 		}
@@ -149,7 +149,7 @@ func generateWorkatoSchemaForChildren(children []Element) []WorkatoField {
 		// If the child has its own children, treat it as an object
 		if len(child.Children) > 0 {
 			workatoField.Type = "object"
-			workatoField.Properties = generateWorkatoSchemaForChildren(child.Children)
+			workatoField.Properties = generateWorkatoSchemaForChildren(child.Children, workatoField.Name)
 		}
 
 		properties = append(properties, workatoField)
@@ -196,13 +196,7 @@ func main() {
 		fmt.Println("Error writing template file:", err)
 		return
 	}
-
-	// Validate the generated template
-	if validateTemplate(template) {
-		fmt.Println("Template generated successfully:", templateOutputFile)
-	} else {
-		fmt.Println("Template validation failed.")
-	}
+	fmt.Println("Template generated successfully:", templateOutputFile)
 
 	// Generate Workato Schema
 	workatoSchema, err := generateWorkatoSchema(xsd)
