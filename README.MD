@@ -14,3 +14,5 @@ This Go application is designed to parse XML Schema Definition (XSD) files and g
 ## Usage
 
 To run the application, use the following command:
+
+```./xsd2wkt -i sample.xsd```
